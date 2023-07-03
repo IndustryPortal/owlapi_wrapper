@@ -1,4 +1,4 @@
-package org.stanford.ncbo.oapiwrapper;
+package org.stanford.ncbo.owlapi.wrapper.metrics;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -8,6 +8,9 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.stanford.ncbo.owlapi.wrapper.OntologyParser;
+import org.stanford.ncbo.owlapi.wrapper.OntologyParserConstants;
+import org.stanford.ncbo.owlapi.wrapper.ParserInvocation;
 
 import java.io.File;
 import java.nio.charset.Charset;
@@ -48,7 +51,9 @@ public class OntologyMetricsTest {
     public void generate_MetricsForPizza_2RecordsCreated() throws Exception {
         String path = "./src/test/resources/repo/output/pizza" + File.separator + OntologyParserConstants.METRICS_FILE;
         String data = FileUtils.readFileToString(new File(path), Charset.defaultCharset());
-        CSVFormat format = CSVFormat.DEFAULT.withHeader(OntologyParserConstants.METRICS_FILE_HEADERS);
+        CSVFormat format = CSVFormat.Builder.create()
+                .setHeader(OntologyParserConstants.METRICS_FILE_HEADERS)
+                .build();
         CSVParser parser = CSVParser.parse(data, format);
 
         // One row for column headers, one row for counts
@@ -59,14 +64,16 @@ public class OntologyMetricsTest {
     public void generate_MetricsForOntologyWithoutImports_Calculated() throws Exception {
         String path = "./src/test/resources/repo/output/pizza" + File.separator + OntologyParserConstants.METRICS_FILE;
         String data = FileUtils.readFileToString(new File(path), Charset.defaultCharset());
-        CSVFormat format = CSVFormat.DEFAULT.withHeader(OntologyParserConstants.METRICS_FILE_HEADERS);
+        CSVFormat format = CSVFormat.Builder.create()
+                .setHeader(OntologyParserConstants.METRICS_FILE_HEADERS)
+                .build();
         CSVParser parser = CSVParser.parse(data, format);
 
         // Start at 1 to skip header row
         CSVRecord record = parser.getRecords().get(1);
         int numClasses = Integer.parseInt(record.get(OntologyParserConstants.METRICS_CLASS_COUNT));
         int numIndividuals = Integer.parseInt(record.get(OntologyParserConstants.METRICS_INDIVIDUAL_COUNT));
-        int numProperties = Integer.parseInt(record.get(OntologyParserConstants.METRICS_PROPERY_COUNT));
+        int numProperties = Integer.parseInt(record.get(OntologyParserConstants.METRICS_PROPERTY_COUNT));
 
         int[] expected = { 100, 5, 8 };
         int[] actual = { numClasses, numIndividuals, numProperties };
@@ -77,14 +84,16 @@ public class OntologyMetricsTest {
     public void generate_MetricsForOntologyWithImports_Calculated() throws Exception {
         String path = "./src/test/resources/repo/output/hsdb" + File.separator + OntologyParserConstants.METRICS_FILE;
         String data = FileUtils.readFileToString(new File(path), Charset.defaultCharset());
-        CSVFormat format = CSVFormat.DEFAULT.withHeader(OntologyParserConstants.METRICS_FILE_HEADERS);
+        CSVFormat format = CSVFormat.Builder.create()
+                .setHeader(OntologyParserConstants.METRICS_FILE_HEADERS)
+                .build();
         CSVParser parser = CSVParser.parse(data, format);
 
         // Start at 1 to skip header row
         CSVRecord record = parser.getRecords().get(1);
         int numClasses = Integer.parseInt(record.get(OntologyParserConstants.METRICS_CLASS_COUNT));
         int numIndividuals = Integer.parseInt(record.get(OntologyParserConstants.METRICS_INDIVIDUAL_COUNT));
-        int numProperties = Integer.parseInt(record.get(OntologyParserConstants.METRICS_PROPERY_COUNT));
+        int numProperties = Integer.parseInt(record.get(OntologyParserConstants.METRICS_PROPERTY_COUNT));
 
         int[] expected = { 356, 35, 208 };
         int[] actual = { numClasses, numIndividuals, numProperties };

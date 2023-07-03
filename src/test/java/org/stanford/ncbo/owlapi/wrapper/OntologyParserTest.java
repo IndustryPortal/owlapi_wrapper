@@ -1,8 +1,10 @@
-package org.stanford.ncbo.oapiwrapper;
+package org.stanford.ncbo.owlapi.wrapper;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.semanticweb.owlapi.model.IRI;
+import org.semanticweb.owlapi.model.OWLOntology;
 
 import java.io.File;
 
@@ -137,6 +139,44 @@ public class OntologyParserTest {
         OntologyParser parser = new OntologyParser(pi);
         assertTrue(parser.parse());
     }
+
+
+    @Test
+    public void parse_DetectsOntologyIRI_ReturnsTrue() throws Exception {
+        String outputRepositoryFolder = "./src/test/resources/repo/output/cno";
+        ParserInvocation pi = new ParserInvocation("./src/test/resources/repo/input/cno",
+                outputRepositoryFolder, "cnov0_5.owl", true);
+        assertTrue(pi.valid());
+
+        OntologyParser parser = new OntologyParser(pi);
+        assertTrue(parser.parse());
+        assertEquals(1, parser.getLocalOntologies().size());
+
+        IRI targetIRI = parser.getTargetOwlOntology().getOntologyID().getOntologyIRI().orNull();
+        IRI sourceIRI = parser.getParsedOntologies().stream().findFirst().get().getOntologyID().getOntologyIRI().orNull();
+        assertNotNull(targetIRI);
+        assertEquals(sourceIRI, targetIRI);
+
+    }
+    @Test
+    public void parse_OntologyAnnotationCount_ReturnsTrue() throws Exception {
+        String outputRepositoryFolder = "./src/test/resources/repo/output/cno";
+        ParserInvocation pi = new ParserInvocation("./src/test/resources/repo/input/cno",
+                outputRepositoryFolder, "cnov0_5.owl", true);
+        assertTrue(pi.valid());
+
+        OntologyParser parser = new OntologyParser(pi);
+        assertTrue(parser.parse());
+        assertEquals(1, parser.getLocalOntologies().size());
+
+        OWLOntology targetOwlOntology = parser.getTargetOwlOntology();
+        OWLOntology sourceOntology = parser.getParsedOntologies().stream().findFirst().orElse(null);
+
+        assertNotNull(sourceOntology);
+        assertEquals(sourceOntology.getAnnotations().size(), targetOwlOntology.getAnnotations().size());
+
+    }
+
 
     @After
     public void tearDown() throws Exception {

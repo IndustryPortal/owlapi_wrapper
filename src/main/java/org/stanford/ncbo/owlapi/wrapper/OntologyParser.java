@@ -1,4 +1,4 @@
-package org.stanford.ncbo.oapiwrapper;
+package org.stanford.ncbo.owlapi.wrapper;
 
 import com.google.common.base.Optional;
 import org.apache.commons.io.FileUtils;
@@ -19,6 +19,7 @@ import org.semanticweb.owlapi.util.InferredSubClassAxiomGenerator;
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.stanford.ncbo.owlapi.wrapper.metrics.OntologyMetrics;
 import uk.ac.manchester.cs.owl.owlapi.OWLLiteralImplString;
 
 import java.io.BufferedReader;
@@ -28,6 +29,8 @@ import java.util.*;
 
 public class OntologyParser {
 	private final static Logger log = LoggerFactory.getLogger(OntologyParser.class.getName());
+	public static final String USE_IMPORTS_IRI = "http://omv.ontoware.org/2005/05/ontology#useImports";
+	public static final String VERSION_SUBJECT = "http://bioportal.bioontology.org/ontologies/versionSubject";
 
 	protected ParserInvocation parserInvocation = null;
 	private ParserLog parserLog = null;
@@ -51,6 +54,12 @@ public class OntologyParser {
 
 		this.targetOwlManager = OWLManager.createOWLOntologyManager();
 	}
+
+
+	public OWLOntology getTargetOwlOntology() {
+		return targetOwlOntology;
+	}
+
 
 	public List<OntologyBean> getLocalOntologies() {
 		return ontologies;
@@ -174,6 +183,45 @@ public class OntologyParser {
   }
 
 	/**
+	 * Get the source ontology IRI and add it to the target ontology
+	 *
+	 * @param sourceOnt
+	 */
+	private void addOntologyIRI(OWLOntology sourceOnt) {
+		Optional<IRI> ontologyIRI = sourceOnt.getOntologyID().getOntologyIRI();
+		Optional<IRI> versionIRI =  sourceOnt.getOntologyID().getVersionIRI();
+		if (ontologyIRI.isPresent()) {
+			OWLOntologyID newOntologyID = new OWLOntologyID(ontologyIRI, versionIRI);
+			SetOntologyID setOntologyID = new SetOntologyID(targetOwlOntology, newOntologyID);
+			this.targetOwlManager.applyChange(setOntologyID);
+		}
+	}
+
+	/**
+	 * Get ontology imports and them to <ONTOLOGY_URI>
+	 * omv:useImports <import_URI>
+	 *
+	 * @param fact
+	 * @param sourceOnt
+	 */
+	private void addOntologyImports(OWLDataFactory fact, OWLOntology sourceOnt){
+		Optional<IRI> sub = sourceOnt.getOntologyID().getOntologyIRI();
+		IRI ontologyIRI = sub.get();
+		if(!sub.isPresent()){
+            return;
+        }
+		// Get imports and add them as omv:useImports
+		OWLAnnotationProperty useImportProp = fact.getOWLAnnotationProperty(IRI.create(USE_IMPORTS_IRI));
+		for (OWLOntology imported : sourceOnt.getImports()) {
+			if (!imported.getOntologyID().isAnonymous()) {
+				log.info("useImports: " + imported.getOntologyID().getOntologyIRI().get());
+				OWLAnnotationAssertionAxiom useImportAxiom = fact.getOWLAnnotationAssertionAxiom(useImportProp, ontologyIRI, imported.getOntologyID().getOntologyIRI().get());
+				this.targetOwlManager.addAxiom(targetOwlOntology, useImportAxiom);
+			}
+		}
+	}
+
+	/**
 	 * Copies ontology-level annotation axioms from the source ontology to the target ontology.
 	 * <p>
 	 * Checks for the owl#versionInfo property. If found, adds a BioPortal-specific "versionSubject"
@@ -192,6 +240,7 @@ public class OntologyParser {
 		}
 
 		for (OWLAnnotation annotation : sourceOntology.getAnnotations()) {
+
 			IRI subjectIRI = ontologyID.getOntologyIRI().get();
 			OWLAnnotationProperty annotationProperty = annotation.getProperty();
 			OWLAnnotationValue annotationValue = annotation.getValue();
@@ -200,7 +249,7 @@ public class OntologyParser {
 			targetOwlManager.addAxiom(targetOwlOntology, annotationAssertionAxiom);
 
 			if (isFile && (annotationProperty.toString().contains("versionInfo"))) {
-				IRI versionSubjectIRI = IRI.create("http://bioportal.bioontology.org/ontologies/versionSubject");
+				IRI versionSubjectIRI = IRI.create(VERSION_SUBJECT);
 				OWLAnnotationProperty versionAnnotationProperty = factory.getOWLAnnotationProperty(OWLRDFVocabulary.OWL_VERSION_INFO.getIRI());
 				OWLAnnotationAssertionAxiom versionAnnotationAssertionAxiom = factory.getOWLAnnotationAssertionAxiom(versionAnnotationProperty, versionSubjectIRI, annotationValue);
 				targetOwlManager.addAxiom(targetOwlOntology, versionAnnotationAssertionAxiom);
@@ -208,90 +257,79 @@ public class OntologyParser {
 		}
 	}
 
-	private boolean buildOWLOntology(boolean isOBO, OWLOntology masterOntology) {
+	private boolean buildOWLOntology(OWLOntology masterOntology, boolean isOBO) {
 
 		Set<OWLAxiom> allAxioms = new HashSet<OWLAxiom>();
 
 		OWLDataFactory fact = sourceOwlManager.getOWLDataFactory();
 		try {
 			targetOwlOntology = targetOwlManager.createOntology();
-      // Add ontology IRI and metadata from the main ontology (not taking from the imports)
-      addOntologyIRIAndImports(sourceOwlManager.getOWLDataFactory(), masterOntology);
+			addOntologyIRI(masterOntology);
+			addOntologyImports(fact, masterOntology);
 		} catch (OWLOntologyCreationException e) {
 			log.error(e.getMessage());
 			parserLog.addError(ParserError.OWL_CREATE_ONTOLOGY_EXCEPTION, "Error buildOWLOntology" + e.getMessage());
 			return false;
 		}
 
+
 		for (OWLOntology sourceOnt : sourceOwlManager.getOntologies()) {
 			IRI documentIRI = sourceOwlManager.getOntologyDocumentIRI(sourceOnt);
 
-			addGroundMetadata(documentIRI, fact, sourceOnt);
-			generateGroundTriplesForAxioms(allAxioms, fact, sourceOnt);
+        addGroundMetadata(documentIRI, fact, masterOntology);
+        generateGroundTriplesForAxioms(allAxioms, fact, masterOntology);
 
-			if (isOBO) {
-				if (!documentIRI.toString().startsWith("owlapi:ontology")) {
-					generateSKOSInObo(allAxioms, fact, sourceOnt);
-				}
+			if (isOBO && !documentIRI.toString().startsWith("owlapi:ontology")) {
+				generateSKOSInObo(allAxioms, fact, sourceOnt);
 			}
 
 			boolean isPrefixedOWL = sourceOwlManager.getOntologyFormat(sourceOnt).isPrefixOWLOntologyFormat();
 			log.info("isPrefixOWLOntologyFormat: {}", isPrefixedOWL);
-			if (isPrefixedOWL == true && !isOBO) {
+			if (isPrefixedOWL && !isOBO) {
 				generateSKOSInOwl(allAxioms, fact, sourceOnt);
 			}
 		}
 
-		targetOwlManager.addAxioms(targetOwlOntology, allAxioms);
-		for (OWLAnnotation ann : targetOwlOntology.getAnnotations()) {
+        targetOwlManager.addAxioms(targetOwlOntology, allAxioms);
+        for (OWLAnnotation ann : targetOwlOntology.getAnnotations()) {
+            AddOntologyAnnotation addAnn = new AddOntologyAnnotation(targetOwlOntology, ann);
+            targetOwlManager.applyChange(addAnn);
+        }
+
+        if (isOBO) {
+            String oboVersion = parserInvocation.getOBOVersion();
+            if (oboVersion != null) {
+                log.info("Adding version: {}", oboVersion);
+                OWLAnnotationProperty prop = fact.getOWLAnnotationProperty(IRI.create(OWLRDFVocabulary.OWL_VERSION_INFO.toString()));
+                IRI versionSubjectIRI = IRI.create(VERSION_SUBJECT);
+                OWLAnnotationAssertionAxiom annVersion = fact.getOWLAnnotationAssertionAxiom(prop, versionSubjectIRI, fact.getOWLLiteral(oboVersion));
+                targetOwlManager.addAxiom(targetOwlOntology, annVersion);
+            }
+        }
+
+		addOntologyAnnotations(masterOntology);
+        escapeXMLLiterals(targetOwlOntology);
+
+        OWLReasonerFactory reasonerFactory = new StructuralReasonerFactory();
+        OWLReasoner reasoner = reasonerFactory.createReasoner(targetOwlOntology);
+        InferredSubClassAxiomGenerator isc = new InferredSubClassAxiomGenerator();
+        Set<OWLSubClassOfAxiom> subAxs = isc.createAxioms(targetOwlOntology.getOWLOntologyManager().getOWLDataFactory(), reasoner);
+        targetOwlManager.addAxioms(targetOwlOntology, subAxs);
+        deprecateBranch();
+
+        log.info("isOBO: {}", isOBO);
+        if (isOBO) {
+            replicateHierarchyAsTreeview(fact);
+        }
+        return true;
+    }
+
+	private void addOntologyAnnotations(OWLOntology masterOntology){
+		for (OWLAnnotation ann : masterOntology.getAnnotations()) {
 			AddOntologyAnnotation addAnn = new AddOntologyAnnotation(targetOwlOntology, ann);
 			targetOwlManager.applyChange(addAnn);
 		}
-
-		if (isOBO) {
-			String oboVersion = parserInvocation.getOBOVersion();
-			if (oboVersion != null) {
-				log.info("Adding version: {}", oboVersion);
-        /*
-        OWLAnnotationProperty prop = fact.getOWLAnnotationProperty(IRI.create(OWLRDFVocabulary.OWL_VERSION_INFO.toString()));
-        IRI versionSubjectIRI = IRI.create("http://bioportal.bioontology.org/ontologies/versionSubject");
-        OWLAnnotationAssertionAxiom annVersion = fact.getOWLAnnotationAssertionAxiom(prop, versionSubjectIRI, fact.getOWLLiteral(oboVersion));
-        targetOwlManager.addAxiom(targetOwlOntology, annVersion);
-        */
-        if (!masterOntology.getOntologyID().isAnonymous()) {
-          // Get ontology URI
-          Optional<IRI> sub = masterOntology.getOntologyID().getOntologyIRI();
-          IRI ontologyIRI = sub.get();
-          OWLAnnotationProperty versionInfoProp = fact.getOWLAnnotationProperty(IRI.create(OWLRDFVocabulary.OWL_VERSION_INFO.toString()));
-          OWLAnnotationAssertionAxiom annOntoURI = fact.getOWLAnnotationAssertionAxiom(versionInfoProp, ontologyIRI, fact.getOWLLiteral(parserInvocation.getOBOVersion()));
-          targetOwlManager.addAxiom(targetOwlOntology, annOntoURI);
-        }
-			}
-		}
-
-		for (OWLOntology sourceOnt : sourceOwlManager.getOntologies()) {
-			for (OWLAnnotation ann : sourceOnt.getAnnotations()) {
-				AddOntologyAnnotation addAnn = new AddOntologyAnnotation(targetOwlOntology, ann);
-				targetOwlManager.applyChange(addAnn);
-			}
-		}
-
-		escapeXMLLiterals(targetOwlOntology);
-
-		OWLReasonerFactory reasonerFactory = new StructuralReasonerFactory();
-		OWLReasoner reasoner = reasonerFactory.createReasoner(targetOwlOntology);
- 		InferredSubClassAxiomGenerator isc = new InferredSubClassAxiomGenerator();
-		Set<OWLSubClassOfAxiom> subAxs = isc.createAxioms(targetOwlOntology.getOWLOntologyManager().getOWLDataFactory(), reasoner);
-		targetOwlManager.addAxioms(targetOwlOntology, subAxs);
-		deprecateBranch();
-
-		log.info("isOBO: {}", isOBO);
-		if (isOBO) {
-			replicateHierarchyAsTreeview(fact);
-		}
-		return true;
 	}
-
 	private void replicateHierarchyAsTreeview(OWLDataFactory fact) {
 		Set<OWLAxiom> treeViewAxs = new HashSet<OWLAxiom>();
 		for (OWLAxiom axiom : targetOwlOntology.getAxioms()) {
@@ -464,7 +502,7 @@ public class OntologyParser {
 							targetOwlManager.addAxiom(target, annAsse);
 							Set<OWLAnnotationAssertionAxiom> del = new HashSet<OWLAnnotationAssertionAxiom>();
 							del.add(ann);
-							targetOwlManager.removeAxioms(target,del); 
+							targetOwlManager.removeAxioms(target,del);
 						}
 					}
 				}
@@ -575,7 +613,7 @@ public class OntologyParser {
 
 		boolean isOBO = isOBO(ontology);
 
-		if (!buildOWLOntology(isOBO, ontology)) return false;
+		if (!buildOWLOntology(ontology, isOBO)) return false;
 
 		if (!serializeOntology()) return false;
 
@@ -602,8 +640,6 @@ public class OntologyParser {
 	}
 
 	private OWLOntology findMasterFile() {
-		OWLOntologyLoaderConfiguration conf = new OWLOntologyLoaderConfiguration();
-		conf = conf.setMissingImportHandlingStrategy(MissingImportHandlingStrategy.SILENT);
 		LogMissingImports missingHandler = new LogMissingImports(parserLog);
 		sourceOwlManager.addMissingImportListener(missingHandler);
 
@@ -611,7 +647,7 @@ public class OntologyParser {
 			try {
 				File file = new File(parserInvocation.getMasterFileName());
 				FileDocumentSource fileDocumentSource = new FileDocumentSource(file);
-				OWLOntology ontology = sourceOwlManager.loadOntologyFromOntologyDocument(fileDocumentSource, conf);
+				OWLOntology ontology = sourceOwlManager.loadOntologyFromOntologyDocument(fileDocumentSource);
 				return ontology;
 			} catch (OWLOntologyCreationException e) {
 				log.error(e.getMessage());
@@ -642,7 +678,7 @@ public class OntologyParser {
 			log.info("Selected master file: {}", selectedBean.getFile().getAbsolutePath());
 			try {
 				FileDocumentSource documentSource = new FileDocumentSource(selectedBean.getFile());
-				OWLOntology ontology = sourceOwlManager.loadOntologyFromOntologyDocument(documentSource, conf);
+				OWLOntology ontology = sourceOwlManager.loadOntologyFromOntologyDocument(documentSource);
 				return ontology;
 			} catch (OWLOntologyCreationException e) {
 				log.error(e.getMessage());
