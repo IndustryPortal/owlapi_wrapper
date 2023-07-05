@@ -10,6 +10,13 @@ public class OntologyParserCommand {
 	private final static Logger log = LoggerFactory.getLogger(OntologyParserCommand.class .getName());
 
 	public static void main(String[] args) {
+
+		// Set proxy (enit) properties using System.setProperty
+		System.setProperty("http.proxyHost", "squid02.local.enit.fr");
+		System.setProperty("http.proxyPort", "3128");
+		System.setProperty("https.proxyHost", "squid02.local.enit.fr");
+		System.setProperty("https.proxyPort", "3128");
+
 		final Options options = new Options();
 		options.addOption("i", "input-repository", true,
 				"Path to folder where input data repository is located")

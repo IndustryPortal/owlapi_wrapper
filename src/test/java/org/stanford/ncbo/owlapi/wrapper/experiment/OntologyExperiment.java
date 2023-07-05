@@ -11,6 +11,13 @@ import java.io.File;
 public class OntologyExperiment {
 
     public static void main(String[] args) throws OWLOntologyCreationException {
+
+        // Set proxy (enit) properties using System.setProperty
+        System.setProperty("http.proxyHost", "squid02.local.enit.fr");
+        System.setProperty("http.proxyPort", "3128");
+        System.setProperty("https.proxyHost", "squid02.local.enit.fr");
+        System.setProperty("https.proxyPort", "3128");
+
         String path = "src/test/resources/BRO_v3.4.owl";
         OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
         OWLOntology ontology = manager.loadOntologyFromOntologyDocument(new File(path));
