@@ -7,16 +7,27 @@ import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.stanford.ncbo.owlapi.wrapper.util.OntologyBasedGraph;
 
 import java.io.File;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 public class OntologyExperiment {
 
     public static void main(String[] args) throws OWLOntologyCreationException {
 
-        // Set proxy (enit) properties using System.setProperty
-        System.setProperty("http.proxyHost", "squid02.local.enit.fr");
-        System.setProperty("http.proxyPort", "3128");
-        System.setProperty("https.proxyHost", "squid02.local.enit.fr");
-        System.setProperty("https.proxyPort", "3128");
+        try {
+            InetAddress id = InetAddress.getLocalHost();
+            if (id.toString().contains("enit")) {
+
+                // Set proxy (enit) properties using System.setProperty
+                System.setProperty("http.proxyHost", "squid02.local.enit.fr");
+                System.setProperty("http.proxyPort", "3128");
+                System.setProperty("https.proxyHost", "squid02.local.enit.fr");
+                System.setProperty("https.proxyPort", "3128");
+                System.out.println("set properties enit proxy");
+            }
+        } catch (UnknownHostException e) {
+            System.out.println("error in getting hostname");
+        }
 
         String path = "src/test/resources/BRO_v3.4.owl";
         OWLOntologyManager manager = OWLManager.createOWLOntologyManager();

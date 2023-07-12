@@ -5,17 +5,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 public class OntologyParserCommand {
 	private final static Logger log = LoggerFactory.getLogger(OntologyParserCommand.class .getName());
 
 	public static void main(String[] args) {
 
-		// Set proxy (enit) properties using System.setProperty
-		System.setProperty("http.proxyHost", "squid02.local.enit.fr");
-		System.setProperty("http.proxyPort", "3128");
-		System.setProperty("https.proxyHost", "squid02.local.enit.fr");
-		System.setProperty("https.proxyPort", "3128");
+		try {
+			InetAddress id = InetAddress.getLocalHost();
+			if (id.toString().contains("enit")) {
+
+				// Set proxy (enit) properties using System.setProperty
+				System.setProperty("http.proxyHost", "squid02.local.enit.fr");
+				System.setProperty("http.proxyPort", "3128");
+				System.setProperty("https.proxyHost", "squid02.local.enit.fr");
+				System.setProperty("https.proxyPort", "3128");
+				log.info("set properties enit proxy");
+			}
+		} catch (UnknownHostException e) {
+			log.error("error in getting hostname");
+		}
 
 		final Options options = new Options();
 		options.addOption("i", "input-repository", true,

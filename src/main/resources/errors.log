@@ -1,0 +1,4 @@
+++++++++++++++++++++++++++++++++++++++++++++++++++
+Error: MASTER_FILE_MISSING
+Message: Can't process swo.owl in input folder! Allowed file extensions are the following ones : [owl, obo, ttl, xml, n3, nt, nq, skos, rdf, rdfs].
+++++++++++++++++++++++++++++++++++++++++++++++++++
