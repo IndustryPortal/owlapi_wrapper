@@ -7,6 +7,8 @@ import org.semanticweb.owlapi.model.IRI;
 import org.semanticweb.owlapi.model.OWLOntology;
 
 import java.io.File;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 import static org.junit.Assert.*;
 
@@ -14,7 +16,6 @@ public class OntologyParserTest {
 
     @Before
     public void setUp() throws Exception {
-
     }
     
     // Run this test: mvn -Dtest=OntologyParserTest#sifrTestParse test

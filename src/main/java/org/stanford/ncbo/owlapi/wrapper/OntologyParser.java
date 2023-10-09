@@ -39,6 +39,8 @@ public class OntologyParser {
     private OWLOntologyManager targetOwlManager = null;
     private OWLOntology targetOwlOntology = null;
 
+    private List<String> loadedOntologiesIRIs = new ArrayList<String>();
+
     public OntologyParser(ParserInvocation parserInvocation) throws OntologyParserException {
         super();
         log.info("executor ...");
@@ -702,24 +704,18 @@ public class OntologyParser {
 
         else if (!sourceOntology.getOntologyID().getOntologyIRI().isPresent()) return sourceOntology;
 
-//        OWLOntology mergedOntology;
-//
-//        try {
-//            mergedOntology = manager.createOntology(originalOntology.getOntologyID().getOntologyIRI().get());
-//        } catch (OWLOntologyCreationException e) {
-//            log.error("error when creating a merged ontology: " + e.getMessage());
-//            return originalOntology;
-//        }
-
         OWLOntologyManager manager =  OWLManager.createOWLOntologyManager();
 
         for (OWLImportsDeclaration importDeclaration : sourceOntology.getImportsDeclarations()) {
             IRI importedOntologyIRI = importDeclaration.getIRI();
+            if (loadedOntologiesIRIs.contains(importedOntologyIRI.toString())) continue;
             OWLOntology importedOntology = null;
             try {
                 importedOntology = manager.loadOntology(importedOntologyIRI);
+                loadedOntologiesIRIs.add(importedOntologyIRI.toString());
+                importedOntology = addImportsAxiomsToOriginalOntology( manager, importedOntology);
             } catch (OWLOntologyCreationException e) {
-                log.error("erro when trying to load ontlogy" + importedOntologyIRI + " : " + e.getMessage());
+                log.error("erro when trying to load ontlogy" + importedOntologyIRI + " : " + Arrays.toString(e.getStackTrace()));
                 continue;
             }
 
